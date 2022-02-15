@@ -4,6 +4,7 @@
 #include "esp_http_server.h"
 #include "esp_system.h"
 #include "esp_log.h"
+#include "esp_err.h"
 #include "esp_vfs.h"
 #include "cJSON.h"
 
@@ -12,22 +13,40 @@
 #include "freertos/task.h"
 #include "freertos/queue.h"
 #include "driver/gpio.h"
+#include "driver/ledc.h"
 
 #include "PID.h"
+#include "ds18b20.h"
+
 PIDdata pid_defaults = {
-    .target = 14.0f,
+    .target = 29.0f,
 
     .Kp = 53.4f,
     .Ki = 0.0f,
-    .Kd = 1.234f,
+    .Kd = 0.0f,
     .dT = 100,
 
-    .Outmin = -45.0f,
-    .Outmax = 15.0f,
-    .Ierrmin = -54.0f,
-    .Ierrmax = 54.0f
+    .Outmin = 0,
+    .Outmax = 1024,
+    .Iterm_min = -54.0f,
+    .Iterm_max = 54.0f
 };
 ptrPIDdata clima = &pid_defaults;
+
+#define LEDC_TIMER              LEDC_TIMER_0
+#define LEDC_MODE               LEDC_LOW_SPEED_MODE
+#define LEDC_OUTPUT_IO          (13) // Define the output GPIO
+#define LEDC_CHANNEL            LEDC_CHANNEL_0
+#define LEDC_DUTY_RES           LEDC_TIMER_10_BIT // Set duty resolution to 13 bits
+#define LEDC_DUTY               (1024) // Set duty to 100%.
+#define LEDC_FREQUENCY          (1) // Frequency in Hertz. Set frequency at 5 kHz
+
+
+#define DS_PIN 21 //GPIO where you connected ds18b20
+DeviceAddress device_id = {40, 144, 20, 251, 12, 0, 0, 146};
+TaskHandle_t sens_temp_Handle = NULL;
+static void sens_temp_task(void* arg);
+float temperature = 0;
 
 QueueHandle_t queue;
 typedef struct
@@ -35,15 +54,14 @@ typedef struct
   uint32_t timestamp;
   float measurement;
   float output;
-  float Perr;
-  float Ierr;
-  float Derr;
+  float Pterm;
+  float Iterm;
+  float Dterm;
 } Data_t;
 
 TaskHandle_t controlHandle = NULL;
 bool controller = false; // pri PID
 static void control_task(void* arg);
-
 
 static const char *REST_TAG = "esp-rest";
 #define REST_CHECK(a, str, goto_tag, ...)                                              \
@@ -152,20 +170,38 @@ static esp_err_t system_info_get_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
-// clima handelers ------------------------------------------------------------------------------------------------
+// Clima handelers
 static esp_err_t clima_init_get_handler(httpd_req_t *req)
 {
-    gpio_config_t io_conf;
-    io_conf.intr_type = GPIO_PIN_INTR_DISABLE;
-    io_conf.mode = GPIO_MODE_OUTPUT;
-    io_conf.pin_bit_mask = (1ULL<<GPIO_NUM_22);
-    io_conf.pull_down_en = 0;
-    io_conf.pull_up_en = 0;
-    gpio_config(&io_conf);
+    // Prepare and then apply the LEDC PWM timer configuration
+    ledc_timer_config_t ledc_timer = {
+        .speed_mode       = LEDC_MODE,
+        .timer_num        = LEDC_TIMER,
+        .duty_resolution  = LEDC_DUTY_RES,
+        .freq_hz          = LEDC_FREQUENCY,
+        .clk_cfg          = LEDC_AUTO_CLK
+    };
+    ESP_ERROR_CHECK(ledc_timer_config(&ledc_timer));
+
+    // Prepare and then apply the LEDC PWM channel configuration
+    ledc_channel_config_t ledc_channel = {
+        .speed_mode     = LEDC_MODE,
+        .channel        = LEDC_CHANNEL,
+        .timer_sel      = LEDC_TIMER,
+        .intr_type      = LEDC_INTR_DISABLE,
+        .gpio_num       = LEDC_OUTPUT_IO,
+        .duty           = LEDC_DUTY, // Set duty to 100%
+        .hpoint         = 0
+    };
+    ESP_ERROR_CHECK(ledc_channel_config(&ledc_channel));
+
+
     queue = xQueueCreate(20, sizeof(Data_t));
     xTaskCreatePinnedToCore(control_task, "control_task", 4096, NULL, 1, &controlHandle,1); 
     if( controlHandle != NULL )
-        vTaskSuspend(controlHandle);
+        vTaskSuspend(controlHandle); 
+        
+    xTaskCreatePinnedToCore(sens_temp_task, "sens_temp_task", 2048, NULL, 1, &sens_temp_Handle,1); 
 
     httpd_resp_set_type(req, "application/json");
     cJSON *root = cJSON_CreateObject();
@@ -216,6 +252,7 @@ static esp_err_t clima_update_parameters_post_handler(httpd_req_t *req)
 static esp_err_t clima_resume_get_handler(httpd_req_t *req)
 {
     xQueueReset(queue);
+    PID_ResetIterm(clima);
     if( controlHandle != NULL )
         vTaskResume(controlHandle);
     httpd_resp_sendstr(req, "Clima Resumed");
@@ -228,7 +265,6 @@ static esp_err_t clima_pause_get_handler(httpd_req_t *req)
     httpd_resp_sendstr(req, "Clima Paused");
     return ESP_OK;
 }
-
 static esp_err_t clima_change_controller_get_handler(httpd_req_t *req)
 {
     controller = !controller;
@@ -247,7 +283,7 @@ static esp_err_t clima_data_get_handler(httpd_req_t *req)
         xQueueReceive(queue, &buf, 0);
         if (controller == false){ // pri PID
             index += snprintf(&str[index], 512-index, "%d %.2f %.2f %.2f %.2f %.2f ", 
-            buf.timestamp,buf.Perr, buf.Ierr, buf.Derr, buf.output, buf.measurement);
+            buf.timestamp,buf.Pterm, buf.Iterm, buf.Dterm, buf.output, buf.measurement);
         }else{
             index += snprintf(&str[index], 512-index, "%d %.2f %.2f ", 
             buf.timestamp, buf.output, buf.measurement);
@@ -261,23 +297,58 @@ static esp_err_t clima_data_get_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
+// Clima tasks
 static void control_task(void* arg)
 {
     Data_t data;
+    float output;
     while(1)
     {
-        data.timestamp = esp_log_timestamp();
-        data.measurement = (float) (esp_random() % 20);
-        data.output = (float) (esp_random() % 20);
-        data.Perr = (float) (esp_random() % 20);
-        data.Ierr = (float) (esp_random() % 20);
-        data.Derr = (float) (esp_random() % 20); 
+        if (controller == true){//za bang bang
+            if (temperature > clima->target){
+                ESP_ERROR_CHECK(ledc_set_duty(LEDC_MODE, LEDC_CHANNEL, 1024));
+                ESP_ERROR_CHECK(ledc_update_duty(LEDC_MODE, LEDC_CHANNEL));
+                data.output = 0;
+            }
+            else{
+                ESP_ERROR_CHECK(ledc_set_duty(LEDC_MODE, LEDC_CHANNEL, 0));
+                ESP_ERROR_CHECK(ledc_update_duty(LEDC_MODE, LEDC_CHANNEL));
+                data.output = 1;
+            }
+            data.timestamp = esp_log_timestamp();
+            data.measurement = temperature;
+        }else{
+            output = PID_Update(clima,temperature);
+            ESP_ERROR_CHECK(ledc_set_duty(LEDC_MODE, LEDC_CHANNEL, 1024- (int) output));
+            ESP_ERROR_CHECK(ledc_update_duty(LEDC_MODE, LEDC_CHANNEL));
+
+            data.timestamp = esp_log_timestamp();
+            data.measurement = temperature;
+            data.output = output;
+            data.Pterm =  clima->Pterm;
+            data.Iterm =  clima->Iterm;
+            data.Dterm =  clima->Dterm; 
+        }
         if (xQueueSend(queue, &data, 0) != pdPASS){
-            ESP_LOGI(REST_TAG, "meh %d %.2f %.2f %.2f %.2f %.2f", data.timestamp,data.Perr, data.Ierr, data.Derr, data.output, data.measurement);
+            ESP_LOGI(REST_TAG, "meh %d %.2f %.2f %.2f %.2f %.2f", data.timestamp,data.Pterm, data.Iterm, data.Dterm, data.output, data.measurement);
             ESP_LOGI(REST_TAG, "meh %d",uxQueueMessagesWaiting(queue));
         }
         vTaskDelay(clima->dT / portTICK_PERIOD_MS);
     }
+}
+static void sens_temp_task(void* arg){
+  ds18b20_init(DS_PIN);
+  gpio_set_pull_mode(DS_PIN, GPIO_PULLUP_ONLY);
+  ds18b20_setResolution((DeviceAddress *)device_id,1,11);
+  while (1)
+  {
+    ds18b20_requestTemperatures();
+    float temp = ds18b20_getTempC((DeviceAddress *)device_id);
+    if (temp > -55.0) 
+        temperature = temp;
+    //ESP_LOGI(REST_TAG, "%fC",temperature);
+    vTaskDelay(10 / portTICK_PERIOD_MS);
+  }
 }
 
 esp_err_t start_rest_server(const char *base_path)

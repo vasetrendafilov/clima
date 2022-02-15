@@ -26,7 +26,7 @@
           <v-text-field v-model="target" class="mt-0 pt-0" type="text" style="width: 30px" @keypress.enter="update_parameters"/>
         </template>
       </v-slider>
-      <v-slider v-model="dT" :max="100" label="dT:" class="align-center mt-3 ml-2 parameters">
+      <v-slider v-model="dT" :max="2000" label="dT:" class="align-center mt-3 ml-2 parameters">
         <template v-slot:append>
           <v-text-field v-model="dT" class="mt-0 pt-0" type="text" style="width: 30px" @keypress.enter="update_parameters"/>
         </template>
@@ -200,13 +200,13 @@ export default {
       if (this.pending_trace.length != 0){
         Plotly.extendTraces(this.$refs.plot, this.pending_trace.shift(), this.controller ? [0,1,2]:[0,1,2,3,4,5])
         var last_time = this.trace[0].x[this.trace[0].x.length -1]
-        if(last_time > 5) {
+        if(last_time > 10) {
           Plotly.relayout(this.$refs.plot,{
               xaxis2: {
-                range: [last_time-5,last_time]
+                range: [last_time-10,last_time]
               },
               xaxis: {
-                range: [last_time-5,last_time]
+                range: [last_time-10,last_time]
               }
           });
         }
@@ -243,14 +243,14 @@ export default {
           this.pending_trace=[]
           Plotly.relayout(this.$refs.plot,{
             xaxis2: {
-              range: [0,5]
+              range: [0,10]
             },
             xaxis: {
-              range: [0,5]
+              range: [0,10]
             }
           });
           this.timer = setInterval(this.updateData, 700)
-          this.timer_live_plot = setInterval(this.live_plot, 50)
+          this.timer_live_plot = setInterval(this.live_plot, parseInt(700/this.dT))
           this.start_time_gate = true
           console.log(data.data)
         })
@@ -345,8 +345,8 @@ export default {
       plot_bgcolor:'#212121',
       paper_bgcolor:'#212121',
       grid: {rows: 2, columns: 1, pattern: 'independent'},
-      xaxis2: { range: [0,5] },
-      xaxis:  { range: [0,5] },
+      xaxis2: { range: [0,10] },
+      xaxis:  { range: [0,10] },
       font: {
         color: 'white'
       }

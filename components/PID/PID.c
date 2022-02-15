@@ -4,7 +4,7 @@ void PID_SetTraget(ptrPIDdata pid, float target, float prev_input)
 {
     pid->target = target;
     pid->prev_input = prev_input;
-    PID_ResetIerr(pid);
+    PID_ResetIterm(pid);
 }
 
 /*
@@ -21,20 +21,20 @@ void PID_SetTuningParams(ptrPIDdata pid, float Kp, float Ki, float Kd)
 /*
  *  Set term limits
  */
-void PID_SetLimits(ptrPIDdata pid, float Outmin, float Outmax, float Ierrmin, float Ierrmax)
+void PID_SetLimits(ptrPIDdata pid, float Outmin, float Outmax, float Iterm_min, float Iterm_max)
 {
     pid->Outmin = Outmin;
     pid->Outmax = Outmax;
-    pid->Ierrmin = Ierrmin;
-    pid->Ierrmax = Ierrmax;
+    pid->Iterm_min = Iterm_min;
+    pid->Iterm_max = Iterm_max;
 }
 
 /*
  *  Reset integral term accumulated error
  */
-void PID_ResetIerr(ptrPIDdata pid)
+void PID_ResetIterm(ptrPIDdata pid)
 {
-    pid->Ierr = 0.0f;
+    pid->Iterm = 0.0f;
 }
 
 /*
@@ -43,25 +43,23 @@ void PID_ResetIerr(ptrPIDdata pid)
  */
 float PID_Update(ptrPIDdata pid, float input) {
     // compute P error
-    pid->Perr = pid->target - input;
+    pid->Pterm = pid->Kp * (pid->target - input);
+    
     // compute I error
-    pid->Ierr +=  pid->Ki * pid->Perr * pid->dT;
-    if (pid->Ierr < pid->Ierrmin) {
-        pid->Ierr = pid->Ierrmin;
-    }
-    else if (pid->Ierr > pid->Ierrmax) {
-        pid->Ierr = pid->Ierrmax;
-    }
+    pid->Iterm +=  pid->Ki * (pid->target - input) * pid->dT;
+    if (pid->Iterm < pid->Iterm_min) pid->Iterm = pid->Iterm_min;
+    else if (pid->Iterm > pid->Iterm_max)  pid->Iterm = pid->Iterm_max;
+
     // compute D error
-    pid->Derr = (pid->prev_input - input) / pid->dT;
+    pid->Dterm = pid->Kd * (pid->prev_input - input) / pid->dT;
 
     // record last value
     pid->prev_input = input;
 
     // clip result
-    float result = (pid->Perr * pid->Kp) + pid->Ierr + (pid->Derr * pid->Kd);
+    float result = pid->Pterm + pid->Iterm + pid->Dterm;
+    if (result > pid->Outmax - 30) result = pid->Outmax; // 30ms leeway fot the ssr
+    else if (result < pid->Outmin + 30) result = pid->Outmin;
 
-    if (result > pid->Outmax) result = pid->Outmax;
-    else if (result < pid->Outmin) result = pid->Outmin;
-    return result;
+    return result; 
 }
