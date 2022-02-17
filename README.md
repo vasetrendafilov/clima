@@ -1,137 +1,176 @@
-# HTTP Restful API Server Example
+<div id="top"></div>
 
-(See the README.md file in the upper level 'examples' directory for more information about examples.)
+<!-- PROJECT LOGO -->
+<br />
+<div align="center">
+  <a href="https://feit.ukim.edu.mk/en/">
+    <img src="images/logo.png" alt="Logo" width="80" height="80">
+  </a>
 
-## Overview
+  <h3 align="center">Climate control</h3>
 
-This example mainly introduces how to implement a RESTful API server and HTTP server on ESP32, with a frontend browser UI.
-
-This example designs several APIs to fetch resources as follows:
-
-| API                        | Method | Resource Example                                      | Description                                                                              | Page URL |
-| -------------------------- | ------ | ----------------------------------------------------- | ---------------------------------------------------------------------------------------- | -------- |
-| `/api/v1/system/info`      | `GET`  | {<br />version:"v4.0-dev",<br />cores:2<br />}        | Used for clients to get system information like IDF version, ESP32 cores, etc            | `/`      |
-| `/api/v1/temp/raw`         | `GET`  | {<br />raw:22<br />}                                  | Used for clients to get raw temperature data read from sensor                            | `/chart` |
-| `/api/v1/light/brightness` | `POST` | { <br />red:160,<br />green:160,<br />blue:160<br />} | Used for clients to upload control values to ESP32 in order to control LED’s brightness  | `/light` |
-
-**Page URL** is the URL of the webpage which will send a request to the API.
-
-### About mDNS
-
-The IP address of an IoT device may vary from time to time, so it’s impracticable to hard code the IP address in the webpage. In this example, we use the `mDNS` to parse the domain name `esp-home.local`, so that we can alway get access to the web server by this URL no matter what the real IP address behind it. See [here](https://docs.espressif.com/projects/esp-idf/en/latest/api-reference/protocols/mdns.html) for more information about mDNS.
-
-**Notes: mDNS is installed by default on most operating systems or is available as separate package.**
-
-### About deploy mode
-
-In development mode, it would be awful to flash the whole webpages every time we update the html, js or css files. So it is highly recommended to deploy the webpage to host PC via `semihost` technology. Whenever the browser fetch the webpage, ESP32 can forward the required files located on host PC. By this mean, it will save a lot of time when designing new pages.
-
-After developing, the pages should be deployed to one of the following destinations:
-
-* SPI Flash - which is recommended when the website after built is small (e.g. less than 2MB).
-* SD Card - which would be an option when the website after built is very large that the SPI Flash have not enough space to hold (e.g. larger than 2MB).
-
-### About frontend framework
-
-Many famous frontend frameworks (e.g. Vue, React, Angular) can be used in this example. Here we just take [Vue](https://vuejs.org/) as example and adopt the [vuetify](https://vuetifyjs.com/) as the UI library.
-
-## How to use example
-
-### Hardware Required
-
-To run this example, you need an ESP32 dev board (e.g. ESP32-WROVER Kit, ESP32-Ethernet-Kit) or ESP32 core board (e.g. ESP32-DevKitC). An extra JTAG adapter might also needed if you choose to deploy the website by semihosting. For more information about supported JTAG adapter, please refer to [select JTAG adapter](https://docs.espressif.com/projects/esp-idf/en/latest/api-guides/jtag-debugging/index.html#jtag-debugging-selecting-jtag-adapter). Or if you choose to deploy the website to SD card, an extra SD slot board is needed.
-
-#### Pin Assignment:
-
-Only if you deploy the website to SD card, then the following pin connection is used in this example.
-
-| ESP32  | SD Card |
-| ------ | ------- |
-| GPIO2  | D0      |
-| GPIO4  | D1      |
-| GPIO12 | D2      |
-| GPIO13 | D3      |
-| GPIO14 | CLK     |
-| GPIO15 | CMD     |
+  <p align="center">
+    Web interface with PID and Bang-Bang controlers 
+    <br />
+   
+  </p>
+</div>
 
 
-### Configure the project
 
-Open the project configuration menu (`idf.py menuconfig`). 
+<!-- TABLE OF CONTENTS -->
+<details>
+  <summary>Table of Contents</summary>
+  <ol>
+    <li>
+      <a href="#about-the-project">About The Project</a>
+      <ul>
+        <li><a href="#built-with">Built With</a></li>
+      </ul>
+    </li>
+    <li>
+      <a href="#getting-started">Getting Started</a>
+      <ul>
+        <li><a href="#prerequisites">Prerequisites</a></li>
+        <li><a href="#installation">Installation</a></li>
+      </ul>
+    </li>
+    <li>
+      <a href="#usage">Usage</a>
+      <ul>
+        <li><a href="#frontend">Frontend</a></li>
+        <li><a href="#backend">Backend</a></li>
+      </ul>
+    </li>
+    <li><a href="#license">License</a></li>
+    <li><a href="#contact">Contact</a></li>
+  </ol>
+</details>
 
-In the `Example Connection Configuration` menu:
 
-* Choose the network interface in `Connect using`  option based on your board. Currently we support both Wi-Fi and Ethernet.
-* If you select the Wi-Fi interface, you also have to set:
-  * Wi-Fi SSID and Wi-Fi password that your esp32 will connect to.
-* If you select the Ethernet interface, you also have to set:
-  * PHY model in `Ethernet PHY` option, e.g. IP101.
-  * PHY address in `PHY Address` option, which should be determined by your board schematic.
-  * EMAC Clock mode, GPIO used by SMI.
 
-In the `Example Configuration` menu:
+<!-- ABOUT THE PROJECT -->
+## About The Project
+![Real](images/real.jpg)
+![Website](images/website.png)
 
-* Set the domain name in `mDNS Host Name` option.
-* Choose the deploy mode in `Website deploy mode`, currently we support deploy website to host PC, SD card and SPI Nor flash.
-  * If we choose to `Deploy website to host (JTAG is needed)`, then we also need to specify the full path of the website in `Host path to mount (e.g. absolute path to web dist directory)`.
-* Set the mount point of the website in `Website mount point in VFS` option, the default value is `/www`.
+We are simulating a closed insulated space where we control the temperature with a lamp as the heater. The temperature is measured with a DS18B20 sensor and the lamp is controlled by a solid state relay. Mcu of choice for this project is ESP-32 and everything is controlled and monitored throughout a web app on it.
 
-### Build and Flash
+The toolbar consists of buttons, fields and sliders to configure the controller:
+* You can switch between the two controllers PID and Bang-Bang
+* Download the data from the plot below into CSV format
+* Pause and Resume the controllers 
+* Ts is the target temperature 
+* dT is a time delay between calculations
+* Kp, Ki, Kd are the PID constants
 
-After the webpage design work has been finished, you should compile them by running following commands:
+All the data from the ESP-32 is sent to the website and ploted in two subplots with plotly:
+* Plots P, I, D terms and the final output that controls the duty cycle of the lamp 
+* Plots the target and current temperature
 
-```bash
-cd path_to_this_example/front/web-demo
-npm install
-npm run build
-```
+### Built With
 
-After a while, you will see a `dist` directory which contains all the website files (e.g. html, js, css, images).
+* [ESP-IDF](https://github.com/espressif/esp-idf)
+* [Vue.js](https://vuejs.org/)
+* [Vuetify.js](https://vuetifyjs.com/en/)
+* [Plotly](https://plotly.com/)
 
-Run `idf.py -p PORT flash monitor` to build and flash the project..
+<!-- GETTING STARTED -->
+## Getting Started
 
-(To exit the serial monitor, type ``Ctrl-]``.)
+### Prerequisites
 
-See the [Getting Started Guide](https://docs.espressif.com/projects/esp-idf/en/latest/get-started/index.html) for full steps to configure and use ESP-IDF to build projects.
+For the hardware side i have a 3d design on [thinker-cad](https://www.tinkercad.com/things/4Gmwou4LzL9) with all the 
+parts listed below
+* [ESP-32 MCU, for my project i used WROOM-32D](https://www.espressif.com/en/products/socs/esp32)
+* [Solid state relay module](https://www.aliexpress.com/item/1005001621690700.html?spm=a2g0o.9042311.0.0.6e524c4dj7FvjA)
+* [Tempreature sensor DS18B20](https://datasheets.maximintegrated.com/en/ds/DS18B20.pdf)
+* Lamp or a heating element
 
-### Extra steps to do for deploying website by semihost
+For the software side you need to install and setup
+* [Npm](https://www.npmjs.com/)
+* [Vscode](https://code.visualstudio.com/)
+* [Esp-idf extension for vscode](https://www.youtube.com/watch?v=Lc6ausiKvQM&t=83s&ab_channel=EspressifSystems)
 
-We need to run the latest version of OpenOCD which should support semihost feature when we test this deploy mode:
+### Installation
 
-```bash
-openocd-esp32/bin/openocd -s openocd-esp32/share/openocd/scripts -f board/esp32-wrover-kit-3.3v.cfg
-```
+1. Clone the repo
+   ```sh
+   git clone https://github.com/vasetrendafilov/clima.git
+   ```
+2. Install NPM packages in subdirectory `front/web-demo`
+   ```sh
+   npm install
+   ```
+3. Build web app
+   ```js
+   npm run build
+   ```
+4. Open `Configuration Editor` from the bottom menu in vscode project, select `Example Connection Configuration` and enter wifi ssid and password 
+5. Chose `Build, Flash and Monitor` to upload the program on the esp-32
+6. For the solid state relay connect DC+ and DC- to 5v and any gnd pin on the ESP-32 and CH1( low trigger) to pin 27 
+7. For the DS18B20 sensor connect pin 3 and 1 to 3.3v and gnd and the middle one to pin 21
 
-## Example Output
+<!-- USAGE EXAMPLES -->
+## Usage
 
-### Render webpage in browser
+### Frontend 
 
-In your browser, enter the URL where the website located (e.g. `http://esp-home.local`). You can also enter the IP address that ESP32 obtained if your operating system currently don't have support for mDNS service.
+The website core is built with `vue.js`, every package that is used is in `package.json`. In `main.js` we create the main vue object with the appropriate router, store and renderer. For the renderer we use vuetify to help with the html and css. With the router there are two paths home and control and the components are stored in `views` folder.
 
-Besides that, this example also enables the NetBIOS feature with the domain name `esp-home`. If your OS supports NetBIOS and has enabled it (e.g. Windows has native support for NetBIOS), then the URL `http://esp-home` should also work.
+`App.vue` is the base html for all the views and it consists of:
+* Navigation drawer to navigate trough all the paths for the website 
+* Top toolbar to display the name and navigation toggle 
+* Bottom footer 
+* Fluid container to display all the router views
 
-![esp_home_local](https://dl.espressif.com/dl/esp-idf/docs/_static/esp_home_local.gif)
+`Home.vue` is a basic card to display esp version and cores, the info is dynamically loaded with ajax. When the page is mounted on the website, there is an api call with a uri that is sent to the ESP-32 and waits for the data do be returned and store it on the website.
 
-### ESP monitor output
+`Control.vue` consists of a to0lbar to tune the parameters and change controllers and two plots using plotly library to monitor live data that is sent from the ESP-32. Every input on the toolbar is limited with min and max values and can be set accordingly in the code. When the website is mounted we make an ajax call to return the default parameters and target that are in the esp-32 and make the plot with the layout and configuration. All the methods of the component are:
+* update_parameters: takes the new parameters from the website and sends them to the mcu it is trigerd by hitting enter on any input
+* change_controller: toggles between PID and bang-bang, sends it to the esp-32 and uptades the plot for the separate data 
+* show_slider / hide_slider: animates in a hidden slider in the Kp, Ki, Kd inputs when the mouse is over them
+* clima_resume: starts the controller, empties the plot and starts two interval timers to update the plot data and disply it 
+* clima_pause: sends message to stop the controller and also clears the timers
+* updateData: sends api calls every 700ms to get batch updates from the mcu parses the data and stores it in a pending trace 
+* live_plot: plots new points every 700/dT ms while the pending trace is empty
 
-In the *Light* page, after we set up the light color and click on the check button, the browser will send a post request to ESP32, and in the console, we just print the color value.
+### Backend
 
-```bash
-I (6115) example_connect: Connected to Ethernet
-I (6115) example_connect: IPv4 address: 192.168.2.151
-I (6325) esp-home: Partition size: total: 1920401, used: 1587575
-I (6325) esp-rest: Starting HTTP Server
-I (128305) esp-rest: File sending complete
-I (128565) esp-rest: File sending complete
-I (128855) esp-rest: File sending complete
-I (129525) esp-rest: File sending complete
-I (129855) esp-rest: File sending complete
-I (137485) esp-rest: Light control: red = 50, green = 85, blue = 28
-```
+Hierarchical structure of the esp-idf contains:
+* `.vscode` is a folder with the setting for esp-idf extension 
+* `components` or libraries that we use in the main program and detailed explanation can be found in the docstring
+* `main` consist of two main c files and `Kconfig` that is used to configure the project
+* `sdkconfig` is the file where the configuration of the project is stored 
+* `partitions.cvs` we use custom partition to store the main program and website
 
-## Troubleshooting
+The main executable file is `esp_rest_main.c` where we initialize the nvs and mdns. Using the example_connect library we connect to the wifi with the ssid and password entered in the configuration editor, next we mount the web partition from sdcard or eeprom depending on the configuration. Last we call `start_rest_server(CONFIG_EXAMPLE_WEB_MOUNT_POINT)` from `rest_server.c` to start the rest server with the mount point.
 
-1. Error occurred when building example: `...front/web-demo/dist doesn't exit. Please run 'npm run build' in ...front/web-demo`.
-   * When you choose to deploy website to SPI flash, make sure the `dist` directory has been generated before you building this example.
+With the `start_rest_server` function, we regirster all the uri hadlers to communicate with the website. Frstly, we include frertos libraries task and queue, ledc driver to control pwm output, ds18b20 lib to communicate with the sensor and PID. The next couple of lines are all the main variables for the pid, pwm configuration, sens and control task and queue to store the struct data below. All the uri handelers are:
+* clima_init_get_handler: configuring the pwm, creating a queue of 20 items of type Data_t and creating two tasks that have the same priority and are running on core 1, with the controlhandle we can suspend and resume the tasks. In the end we send a response to the website with the default parameters
+* clima_update_parameters_post_handler: its a little bit complex to recive data, but athe the end the bufer i parsed into a cJson object and we update the parameters of the pid with `PID_SetTuningParams` and `PID_SetTraget`
+* clima_resume_get_handler: reset the queue to remove previous data, resume the control task and reset integral error of the PID
+* clima_pause_get_handler: just suspends the control task
+* clima_data_get_handler: we are receiving all the elements in the queue, transforming the data into a string and sending it back as a response to the website
+* control_task: we declare temporary struct to hold the data and go into an infinite loop, depending on the controller:
+  * Bang-Bang is a simple controller that turns the lamp on all the time by setting the duty to 0% until the current temperature is above the target, last we log the timestamp and measurement from the temperature sensor
+  * PID is more complex and we use `PID_Update` to calculate the duty cycle, last we log also the PID terms
 
-(For any technical queries, please open an [issue](https://github.com/espressif/esp-idf/issues) on GitHub. We will get back to you as soon as possible.)
+  At the end of the while loop, we send the temporary data to the queue and delay the task 
+
+* sens_temp_task: we initialize the sensor and set the resolution, in the infinite loop we request and wait for a new reading, store it in a temporary variable and if it does not give an error we store the temperature in a global variable to be accessed by the control task
+  
+<!-- LICENSE -->
+## License
+
+Distributed under the MIT License. See `LICENSE.txt` for more information.
+
+
+<!-- CONTACT -->
+## Contact
+
+Vase Trendafilov - [@TrendafilovVase](https://twitter.com/TrendafilovVase) - vasetrendafilov@gmail.com
+
+Project Link: [https://github.com/vasetrendafilov/clima](https://github.com/vasetrendafilov/clima)
+
+<p align="right">(<a href="#top">back to top</a>)</p>

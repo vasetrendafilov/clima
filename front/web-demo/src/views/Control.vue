@@ -33,7 +33,7 @@
       </v-slider>
       <v-slider
         v-model="Kp"
-        :max="200"
+        :max="300"
         label="Kp:"
         class="align-center mt-3 ml-2 parameters"
         @mouseleave.native="hide_slider"
@@ -51,7 +51,7 @@
       </v-slider>
       <v-slider
         v-model="Ki"
-        :max="200"
+        :max="300"
         label="Ki:"
         class="align-center mt-3 ml-2 parameters"
         @mouseleave.native="hide_slider"
@@ -69,7 +69,7 @@
       </v-slider>
       <v-slider
         v-model="Kd"
-        :max="200"
+        :max="300"
         label="Kd:"
         class="align-center mt-3 ml-2 parameters"
         @mouseleave.native="hide_slider"
@@ -250,7 +250,7 @@ export default {
             }
           });
           this.timer = setInterval(this.updateData, 700)
-          this.timer_live_plot = setInterval(this.live_plot, parseInt(700/this.dT))
+          this.timer_live_plot = setInterval(this.live_plot, parseInt(800/this.dT))
           this.start_time_gate = true
           console.log(data.data)
         })

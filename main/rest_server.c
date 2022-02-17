@@ -48,6 +48,10 @@ TaskHandle_t sens_temp_Handle = NULL;
 static void sens_temp_task(void* arg);
 float temperature = 0;
 
+TaskHandle_t controlHandle = NULL;
+bool controller = false; // pri PID
+static void control_task(void* arg);
+
 QueueHandle_t queue;
 typedef struct
 {
@@ -58,10 +62,6 @@ typedef struct
   float Iterm;
   float Dterm;
 } Data_t;
-
-TaskHandle_t controlHandle = NULL;
-bool controller = false; // pri PID
-static void control_task(void* arg);
 
 static const char *REST_TAG = "esp-rest";
 #define REST_CHECK(a, str, goto_tag, ...)                                              \
@@ -319,7 +319,7 @@ static void control_task(void* arg)
             data.measurement = temperature;
         }else{
             output = PID_Update(clima,temperature);
-            ESP_ERROR_CHECK(ledc_set_duty(LEDC_MODE, LEDC_CHANNEL, 1024- (int) output));
+            ESP_ERROR_CHECK(ledc_set_duty(LEDC_MODE, LEDC_CHANNEL, 1024 - (int) output));
             ESP_ERROR_CHECK(ledc_update_duty(LEDC_MODE, LEDC_CHANNEL));
 
             data.timestamp = esp_log_timestamp();

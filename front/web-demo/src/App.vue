@@ -30,7 +30,7 @@
       </v-container>
     </v-content>
     <v-footer color="dark accent-4" app fixed>
-      <span class="white--text ma-auto">&copy; INRS CO., LTD. All rights reserved.</span>
+      <span class="white--text ma-auto">&copy; FEIT CO., LTD. All rights reserved.</span>
     </v-footer>
   </v-app>
 </template>
