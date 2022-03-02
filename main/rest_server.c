@@ -262,6 +262,8 @@ static esp_err_t clima_pause_get_handler(httpd_req_t *req)
 {
     if( controlHandle != NULL )
         vTaskSuspend(controlHandle);
+    ESP_ERROR_CHECK(ledc_set_duty(LEDC_MODE, LEDC_CHANNEL, 1024));
+    ESP_ERROR_CHECK(ledc_update_duty(LEDC_MODE, LEDC_CHANNEL));
     httpd_resp_sendstr(req, "Clima Paused");
     return ESP_OK;
 }
