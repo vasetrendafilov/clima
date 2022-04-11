@@ -6,5 +6,8 @@
     "task.h": "c",
     "event_groups.h": "c"
   },
-  "idf.adapterTargetName": "esp32"
+  "idf.adapterTargetName": "esp32",
+  "idf.portWin": "COM3",
+  "idf.flashType": "UART",
+  "cmake.configureOnOpen": false
 }

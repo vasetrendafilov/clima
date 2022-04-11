@@ -143,7 +143,7 @@ export default {
       controller:false,//pri PID
       timer: null,
       timer_live_plot: null,
-      live_plot_time_delta:800,
+      update_data_delta:700,
       Kp:10, Ki:0, Kd:1, dT:1,target:1,
       slider_gate:false,
       start_time:0, start_time_gate:false,
@@ -168,7 +168,6 @@ export default {
   },
   methods: {
     updateData: function () {
-      var start = new Date().getTime();
       this.$ajax
         .get('/api/v1/clima/data')
         .then(data => {
@@ -193,8 +192,6 @@ export default {
               })  
             }
           }
-          var end = new Date().getTime();
-          this.live_plot_time_delta = parseInt((this.live_plot_time_delta +  (end - start))/2)
         })
         .catch(error => {
           console.log(error)
@@ -253,8 +250,8 @@ export default {
               range: [0,10]
             }
           });
-          this.timer = setInterval(this.updateData, 700)
-          this.timer_live_plot = setInterval(this.live_plot, parseInt(this.live_plot_time_delta/this.dT))
+          this.timer = setInterval(this.updateData, this.update_data_delta)
+          this.timer_live_plot = setInterval(this.live_plot, parseInt(this.dT))
           this.start_time_gate = true
           console.log(data.data)
         })
